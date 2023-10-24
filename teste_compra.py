@@ -20,7 +20,7 @@ print()
 
 compra_amazon = CompraCredito(1000.0, datetime(2023, 2, 15, 19, 46, 17), 'Amazon', 'Casa', visa, 10)
 
-print(f'Compra a crédito: {compra_amazon.valor} em {compra_amazon.quantidade_parcelas}x de {compra_amazon.valor_parcela}')
+print('Compra a crédito: {compra_amazon.valor} em {compra_amazon.quantidade_parcelas}x de {compra_amazon.valor_parcela}')
 print()
 
 #******************************
