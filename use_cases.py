@@ -1,84 +1,79 @@
-from collections import defaultdict
-from datetime import date
-from datetime import datetime
+from datetime import date, datetime
 from random import randint
-from dateutil.relativedelta import relativedelta
 from model import Cartao, Compra
+from dateutil.relativedelta import relativedelta
+from sqlalchemy import select, extract
+from database import db
 
-def cria_numero_do_cartao():
+
+def cria_numero_cartao():
     grupos_de_numeros = [f'{randint(1, 9999):04}' for i in range(4)]
     return ' '.join(grupos_de_numeros)
+
 
 def cria_cvv_do_cartao():
     cvv = f'{randint(1, 999):03}'
     return cvv
+
 
 def define_validade_do_cartao():
     validade = date.today() + relativedelta(years=4, months=6, day=31)
     return validade
 
 
-
-define_validade_do_cartao
-
-cartao1 = Cartao(cria_numero_do_cartao(), date(2031, 1, 31), '321', 1000.0, 'Steve Rogers', id=1)
-
-cartao2 = Cartao(cria_numero_do_cartao(), date(2035, 5, 31), '789', 2000.0, 'Matt Murdock', id=2)
-
-cartao3 = Cartao(cria_numero_do_cartao(), date(2029, 5, 31), '887', 10000.0,
-'Bruce Wayne', id=3)
-
-
-banco_cartoes = {
-	cartao1.id: cartao1,
-	cartao2.id: cartao2,
-	cartao3.id: cartao3
-	}
-
-### método para listar os cartões
-
 def lista_cartoes():
-	return banco_cartoes.values()
+    comando = select(Cartao).order_by(Cartao.cliente, Cartao.numero)
+    resultado = db.session.scalars(comando)
+    return list(resultado)
 
 
-### método para pesquisar os cartões pelo Id
+def pesquisa_cartao_por_id(cartao_id):
+    return db.session.get(Cartao, cartao_id)
 
-def pesquisa_cartao_por_id(id):
-	return banco_cartoes.get(id)
-
-### método para cadastrar cartão
 
 def cadastra_cartao(cliente, limite):
-	global sequencia_ids, banco_cartoes
-	numero = cria_numero_do_cartao()
-	cvv = cria_cvv_do_cartao()
-	validade = define_validade_do_cartao()
-	novo_cartao = Cartao(numero=numero, validade=validade, cvv=cvv, limite=limite,
-cliente=cliente, id=sequencia_ids)
-	banco_cartoes[novo_cartao.id] = novo_cartao
-	sequencia_ids += 1
+    numero = cria_numero_cartao()
+    cvv = cria_cvv_do_cartao()
+    validade = define_validade_do_cartao()
+    cartao = Cartao(numero=numero, validade=validade, cvv=cvv,
+                    limite=limite, cliente=cliente)
+    db.session.add(cartao)
+    db.session.commit()
 
-### Cadastra compras realizadas
 
 def cadastra_compra(cartao_id, valor, categoria, estabelecimento):
-	global sequencia_ids, banco_compras
-	cartao = pesquisa_cartao_por_id(cartao_id)
-	agora = datetime.now()
-	nova_compra = Compra(valor=valor, categoria=categoria,
-	estabelecimento=estabelecimento, cartao=cartao, data=agora, id=sequencia_ids)
-	banco_compras.append(nova_compra)
-
-### Método para a listagem de compras realizadas no cartão
-
-def lista_compras():
-	return banco_compras
+    cartao = pesquisa_cartao_por_id(cartao_id)
+    if not cartao:
+        raise ValueError('Cartão não encontrado')
+    agora = datetime.now()
+    compra = Compra(valor=valor, categoria=categoria, estabelecimento=estabelecimento, cartao=cartao, data=agora)
+    db.session.add(compra)
+    db.session.commit()
 
 
+def define_limite(cartao_id, limite):
+    cartao = pesquisa_cartao_por_id(cartao_id)
+    cartao.limite = limite
+    db.session.commit()
 
-### Método para Montar relatório de gastos nos cartões agrupados por categoria
 
-def monta_relatorio_gastos_por_categoria():
-	gasto_por_categoria = defaultdict(float)
-	for compra in lista_compras():
-		gasto_por_categoria[compra.categoria] += compra.valor
-	return gasto_por_categoria
+def altera_status_cartao(cartao_id, operacao):
+    cartao = pesquisa_cartao_por_id(cartao_id)
+    operacao(cartao)
+    db.session.commit()
+
+
+def ativa_cartao(cartao_id):
+    altera_status_cartao(cartao_id, lambda c: c.ativa())
+
+
+def cancela_cartao(cartao_id):
+    altera_status_cartao(cartao_id, lambda c: c.cancela())
+
+
+def listar_compras(cartao_id, data: datetime = None):
+    comando = select(Compra).order_by(Compra.data).where(Compra.cartao_id == cartao_id)
+    if data:
+        comando = comando.filter(extract('month', Compra.data) == data.month)
+    resultado = db.session.scalars(comando)
+    return list(resultado)

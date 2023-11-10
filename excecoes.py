@@ -1,3 +1,0 @@
-class ValorExcedidoException(Exception):
-    pass
-
